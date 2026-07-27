@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face {
+    font-family: "Noto Naskh Arabic";
+    src: url("{{ font_path }}");
+  }
+
+  @page {
+    size: {{ page_width_in }}in {{ page_height_in }}in;
+    margin: 0;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
+
+  .page {
+    position: relative;
+    width: {{ page_width_in }}in;
+    height: {{ page_height_in }}in;
+    overflow: hidden;
+    break-after: page;
+  }
+
+  .page:last-child {
+    break-after: auto;
+  }
+
+  .bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Position/size is inlined per page below since recto/verso pages have
+     different gutter-side margins (layout.get_page_margins). */
+  .text-safe-zone {
+    position: absolute;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+
+  .story-text {
+    direction: rtl;
+    unicode-bidi: isolate;
+    font-family: "Noto Naskh Arabic", sans-serif;
+    font-size: 28pt;
+    line-height: 1.7;
+    text-align: right;
+    color: #1a1a1a;
+    background: rgba(255, 255, 255, 0.85);
+    padding: 0.2in 0.35in;
+    border-radius: 14px;
+    max-width: 92%;
+  }
+</style>
+</head>
+<body>
+{% for page in pages %}
+  <div class="page">
+    <img class="bg" src="{{ page.image_data_uri }}" alt="">
+    <div class="text-safe-zone" style="
+        top: {{ page.margins.top_in }}in;
+        left: {{ page.margins.left_in }}in;
+        width: {{ page_width_in - page.margins.left_in - page.margins.right_in }}in;
+        height: {{ page_height_in - page.margins.top_in - page.margins.bottom_in }}in;
+      ">
+      <p class="story-text">{{ page.text_ar }}</p>
+    </div>
+  </div>
+{% endfor %}
+</body>
+</html>

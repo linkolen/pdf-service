@@ -1,0 +1,4 @@
+weasyprint==69.0
+jinja2==3.1.4
+minio==7.2.20
+pytest==8.3.5
