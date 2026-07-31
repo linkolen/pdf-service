@@ -1,8 +1,7 @@
 """
-Multi-page interior composition (spec Section 9, step 2): fetch each page's
-image from MinIO, lay it out with KDP-correct recto/verso margins, and render
-one combined interior PDF back to MinIO. Cover composition and the FastAPI
-/compose endpoint are later milestones (Section 9, steps 4 and 6).
+Multi-page interior composition (spec Section 9, step 2) and wraparound cover
+composition (Section 9, step 6): fetch stored images from MinIO, lay them out
+per KDP's rules, and render PDFs back to MinIO.
 """
 
 from __future__ import annotations
@@ -81,5 +80,53 @@ def compose_interior(
     pdf_bytes = HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf()
 
     output_key = f"{book_id}/interior.pdf"
+    store.put_pdf_bytes(output_key, pdf_bytes)
+    return output_key
+
+
+def compose_cover(
+    book_id: str,
+    image_key: str,
+    title_ar: str,
+    page_count: int,
+    paper_type: str,
+    trim_width_in: float = 8.5,
+    trim_height_in: float = 8.5,
+    bleed_in: float = 0.125,
+    storage: Optional[Storage] = None,
+) -> str:
+    """Fetch the single wraparound cover illustration from MinIO `uploads`,
+    size the page to KDP's back+spine+front formula (Section 7), overlay the
+    Arabic title on the front-cover panel, render one PDF, write it to MinIO
+    `outputs`, and return its object key."""
+    store = storage or Storage()
+
+    spine_in = layout.spine_width_in(page_count, paper_type)
+    cover_width_in = layout.cover_width_in(trim_width_in, bleed_in, spine_in)
+    cover_height_in = layout.cover_height_in(trim_height_in, bleed_in)
+
+    # Flattened print files always read back-cover | spine | front-cover left
+    # to right -- a fixed manufacturing convention, independent of the book's
+    # own (RTL) reading direction. The front panel is the rightmost strip.
+    front_panel_width_in = trim_width_in + bleed_in
+    safe_margin_in = layout.outside_margin_in(bleed=True)
+
+    image_bytes = store.get_image_bytes(image_key)
+
+    env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
+    template = env.get_template("cover.html")
+    html_str = template.render(
+        cover_width_in=cover_width_in,
+        cover_height_in=cover_height_in,
+        front_panel_width_in=front_panel_width_in,
+        safe_margin_in=safe_margin_in,
+        font_path=FONT_PATH,
+        image_data_uri=_data_uri(image_bytes, image_key),
+        title_ar=title_ar,
+    )
+
+    pdf_bytes = HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf()
+
+    output_key = f"{book_id}/cover.pdf"
     store.put_pdf_bytes(output_key, pdf_bytes)
     return output_key
