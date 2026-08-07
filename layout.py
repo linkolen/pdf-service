@@ -81,6 +81,27 @@ def get_page_margins(page_number: int, total_pages: int, bleed: bool = True) -> 
     return PageMargins(top_in=outside, bottom_in=outside, left_in=left, right_in=right)
 
 
+def validate_ebook_cover_dimensions(width_px: int, height_px: int) -> list[str]:
+    """Checks a rasterized ebook front-cover JPEG against KDP's Kindle cover
+    file spec (min/max pixel bounds) -- see config/kdp_rules.json's
+    "ebook_cover" section. The "ideal" 1.6:1 ratio is a recommendation, not
+    enforced here, since a square trim (this project's default) can't meet it
+    without cropping content out of the illustration."""
+    rules = _RULES["ebook_cover"]
+    warnings = []
+    if width_px < rules["min_width_px"] or height_px < rules["min_height_px"]:
+        warnings.append(
+            f"Ebook cover {width_px}x{height_px}px is below KDP's minimum of "
+            f"{rules['min_width_px']}x{rules['min_height_px']}px."
+        )
+    if width_px > rules["max_dimension_px"] or height_px > rules["max_dimension_px"]:
+        warnings.append(
+            f"Ebook cover {width_px}x{height_px}px exceeds KDP's maximum of "
+            f"{rules['max_dimension_px']}px per side."
+        )
+    return warnings
+
+
 def spine_width_in(total_pages: int, paper_type: str) -> float:
     factors = _RULES["spine_width_factor_in_per_page"]
     if paper_type not in factors:

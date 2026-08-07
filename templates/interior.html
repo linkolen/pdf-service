@@ -57,7 +57,11 @@
     line-height: 1.7;
     text-align: right;
     color: #1a1a1a;
-    background: rgba(255, 255, 255, 0.85);
+    /* Opaque, not translucent: KDP's print pipeline documents "not
+       flattening transparent objects/layers" as a file-processing failure
+       cause, and WeasyPrint renders CSS alpha as real unflattened PDF
+       transparency (ExtGState /ca), not a pre-baked pixel. */
+    background: #ffffff;
     padding: 0.2in 0.35in;
     border-radius: 14px;
     max-width: 92%;

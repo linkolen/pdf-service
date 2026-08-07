@@ -66,3 +66,23 @@ class Storage:
             content_type="application/pdf",
         )
         return key
+
+    def put_jpeg_bytes(self, key: str, data: bytes) -> str:
+        self.client.put_object(
+            OUTPUTS_BUCKET,
+            key,
+            BytesIO(data),
+            length=len(data),
+            content_type="image/jpeg",
+        )
+        return key
+
+    def put_epub_bytes(self, key: str, data: bytes) -> str:
+        self.client.put_object(
+            OUTPUTS_BUCKET,
+            key,
+            BytesIO(data),
+            length=len(data),
+            content_type="application/epub+zip",
+        )
+        return key

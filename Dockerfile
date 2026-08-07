@@ -23,7 +23,7 @@ COPY templates/ templates/
 COPY config/ config/
 COPY tests/ tests/
 COPY scripts/ scripts/
-COPY render.py layout.py storage.py compose.py main.py .
+COPY render.py layout.py storage.py compose.py epub.py imaging.py main.py .
 
 EXPOSE 8000
 

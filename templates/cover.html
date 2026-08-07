@@ -58,7 +58,9 @@
     line-height: 1.4;
     text-align: center;
     color: #1a1a1a;
-    background: rgba(255, 255, 255, 0.85);
+    /* Opaque, not translucent -- see templates/interior.html's .story-text
+       for why: KDP's print pipeline flags unflattened PDF transparency. */
+    background: #ffffff;
     padding: 0.25in 0.35in;
     border-radius: 14px;
     max-width: 100%;

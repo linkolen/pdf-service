@@ -1,5 +1,5 @@
 {
-  "_source": "https://kdp.amazon.com/en_US/help/topic/G201857950 and https://kdp.amazon.com/en_US/help/topic/GVBQ3CMEQW3W2VL6, fetched 2026-07-27. Re-check against KDP's published guidelines before relying on these for a real submission.",
+  "_source": "https://kdp.amazon.com/en_US/help/topic/G201857950 and https://kdp.amazon.com/en_US/help/topic/GVBQ3CMEQW3W2VL6, fetched 2026-07-27; https://kdp.amazon.com/en_US/help/topic/G200645690, fetched 2026-08-07. Re-check against KDP's published guidelines before relying on these for a real submission.",
   "trim": {
     "width_in": 8.5,
     "height_in": 8.5
@@ -27,5 +27,18 @@
     "cream": 0.0025,
     "groundwood": 0.00235,
     "color": 0.002347
+  },
+  "ebook_cover": {
+    "_note": "Kindle eBook cover file spec (print wraparound cover has no JPEG requirement) -- G200645690.",
+    "format": "JPEG",
+    "color_mode": "RGB",
+    "min_width_px": 625,
+    "min_height_px": 1000,
+    "ideal_width_px": 1600,
+    "ideal_height_px": 2560,
+    "ideal_height_to_width_ratio": 1.6,
+    "max_dimension_px": 10000,
+    "recommended_dpi": 300,
+    "max_file_size_mb": 50
   }
 }

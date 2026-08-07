@@ -70,13 +70,21 @@ def main() -> None:
         pages.append(PageSpec(page_number=n, image_key=key, text_ar=text))
         print(f"seeded {key}")
 
-    output_key = compose_interior(BOOK_ID, pages, storage=store)
-    print(f"composed -> {OUTPUTS_BUCKET}/{output_key}")
+    result = compose_interior(BOOK_ID, pages, title_ar="كتاب تجريبي", storage=store)
+    print(f"composed -> {OUTPUTS_BUCKET}/{result.pdf_key}")
+    print(f"composed -> {OUTPUTS_BUCKET}/{result.epub_key}")
 
-    pdf_bytes = store.client.get_object(OUTPUTS_BUCKET, output_key).read()
-    out_path = Path(__file__).parent.parent / "output" / "interior.pdf"
-    out_path.write_bytes(pdf_bytes)
-    print(f"wrote {out_path} ({len(pdf_bytes)} bytes)")
+    output_dir = Path(__file__).parent.parent / "output"
+
+    pdf_bytes = store.client.get_object(OUTPUTS_BUCKET, result.pdf_key).read()
+    pdf_path = output_dir / "interior.pdf"
+    pdf_path.write_bytes(pdf_bytes)
+    print(f"wrote {pdf_path} ({len(pdf_bytes)} bytes)")
+
+    epub_bytes = store.client.get_object(OUTPUTS_BUCKET, result.epub_key).read()
+    epub_path = output_dir / "interior.epub"
+    epub_path.write_bytes(epub_bytes)
+    print(f"wrote {epub_path} ({len(epub_bytes)} bytes)")
 
 
 if __name__ == "__main__":

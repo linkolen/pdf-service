@@ -1,0 +1,39 @@
+@font-face {
+  font-family: "Noto Naskh Arabic";
+  src: url("../fonts/NotoNaskhArabic.ttf");
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Noto Naskh Arabic", sans-serif;
+}
+
+.page {
+  text-align: center;
+  /* Each story page starts on a fresh screen; the reading system computes
+     actual pagination from the reader's font size/device, this is just a
+     hint, unlike a fixed-layout canvas. */
+  page-break-before: always;
+}
+
+.page.first-page {
+  page-break-before: avoid;
+}
+
+.bg {
+  max-width: 100%;
+  height: auto;
+}
+
+.story-text {
+  /* RTL comes from dir="rtl" on the <p> itself (page.xhtml) -- the spec-
+     compliant mechanism. The EPUB CSS profile forbids the direction/
+     unicode-bidi properties outright (epubcheck CSS-001, hard error); with
+     KDP's own pipeline as the only real target reading system here, spec
+     validity wins over hedging for the CSS-bidi-only readers those
+     properties would have helped. */
+  text-align: right;
+  line-height: 1.7;
+  margin: 1em 6%;
+}

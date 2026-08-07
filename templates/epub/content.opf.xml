@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="pub-id" xml:lang="ar">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="pub-id">{{ book_uuid }}</dc:identifier>
+    <dc:title>{{ title_ar }}</dc:title>
+    <dc:language>ar</dc:language>
+    <meta property="dcterms:modified">{{ modified }}</meta>
+    <!-- Reflowable, not fixed-layout: KDP's own troubleshooting docs reject
+         EPUBs whose OPF declares the pre-paginated rendition property (see
+         epub.py's module docstring), so no rendition/fixed-layout/viewport
+         metadata here. primary-writing-mode is a legacy KF8 RTL page-turn
+         direction hint, independent of fixed-layout vs reflowable, kept
+         here for older Kindle apps. -->
+    <meta name="primary-writing-mode" content="horizontal-rl"/>
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="css" href="css/style.css" media-type="text/css"/>
+    <item id="font-naskh" href="fonts/NotoNaskhArabic.ttf" media-type="font/ttf"/>
+{% for page in pages %}
+    <item id="{{ page.id }}" href="text/{{ page.xhtml_filename }}" media-type="application/xhtml+xml"/>
+    <item id="{{ page.id }}-img" href="images/{{ page.image_filename }}" media-type="{{ page.image_media_type }}"/>
+{% endfor %}
+  </manifest>
+  <spine page-progression-direction="rtl">
+{% for page in pages %}
+    <itemref idref="{{ page.id }}"/>
+{% endfor %}
+  </spine>
+</package>

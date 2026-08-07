@@ -46,6 +46,8 @@ class ComposeRequest(BaseModel):
 
 class ComposeResponse(BaseModel):
     output_key: str
+    epub_output_key: Optional[str] = None
+    jpeg_output_key: Optional[str] = None
 
 
 @app.get("/health")
@@ -72,17 +74,18 @@ def _compose_interior(request: ComposeRequest) -> ComposeResponse:
     ]
 
     try:
-        output_key = compose_interior(
+        result = compose_interior(
             book_id=request.book_id,
             pages=pages,
             trim_width_in=request.trim.width_in,
             trim_height_in=request.trim.height_in,
             bleed_in=request.trim.bleed_in,
+            title_ar=request.title_ar,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    return ComposeResponse(output_key=output_key)
+    return ComposeResponse(output_key=result.pdf_key, epub_output_key=result.epub_key)
 
 
 def _compose_cover(request: ComposeRequest) -> ComposeResponse:
@@ -102,7 +105,7 @@ def _compose_cover(request: ComposeRequest) -> ComposeResponse:
         )
 
     try:
-        output_key = compose_cover(
+        result = compose_cover(
             book_id=request.book_id,
             image_key=request.image_key,
             title_ar=request.title_ar,
@@ -117,4 +120,4 @@ def _compose_cover(request: ComposeRequest) -> ComposeResponse:
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
-    return ComposeResponse(output_key=output_key)
+    return ComposeResponse(output_key=result.pdf_key, jpeg_output_key=result.jpeg_key)

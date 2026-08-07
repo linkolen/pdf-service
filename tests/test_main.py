@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from fastapi.testclient import TestClient
 
 import main
+from compose import ComposeCoverResult, ComposeInteriorResult
 
 client = TestClient(main.app)
 
@@ -19,11 +20,15 @@ def test_health():
 def test_compose_calls_compose_interior_with_parsed_pages(monkeypatch):
     captured = {}
 
-    def fake_compose_interior(book_id, pages, trim_width_in, trim_height_in, bleed_in, storage=None):
+    def fake_compose_interior(
+        book_id, pages, trim_width_in, trim_height_in, bleed_in, title_ar=None, storage=None
+    ):
         captured["book_id"] = book_id
         captured["pages"] = pages
         captured["trim"] = (trim_width_in, trim_height_in, bleed_in)
-        return f"{book_id}/interior.pdf"
+        return ComposeInteriorResult(
+            pdf_key=f"{book_id}/interior.pdf", epub_key=f"{book_id}/interior.epub"
+        )
 
     monkeypatch.setattr(main, "compose_interior", fake_compose_interior)
 
@@ -40,7 +45,11 @@ def test_compose_calls_compose_interior_with_parsed_pages(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"output_key": "book-1/interior.pdf"}
+    assert response.json() == {
+        "output_key": "book-1/interior.pdf",
+        "epub_output_key": "book-1/interior.epub",
+        "jpeg_output_key": None,
+    }
     assert captured["book_id"] == "book-1"
     assert captured["trim"] == (8.5, 8.5, 0.125)
     assert len(captured["pages"]) == 1
@@ -51,9 +60,11 @@ def test_compose_calls_compose_interior_with_parsed_pages(monkeypatch):
 def test_compose_uses_default_trim_when_omitted(monkeypatch):
     captured = {}
 
-    def fake_compose_interior(book_id, pages, trim_width_in, trim_height_in, bleed_in, storage=None):
+    def fake_compose_interior(
+        book_id, pages, trim_width_in, trim_height_in, bleed_in, title_ar=None, storage=None
+    ):
         captured["trim"] = (trim_width_in, trim_height_in, bleed_in)
-        return "out.pdf"
+        return ComposeInteriorResult(pdf_key="out.pdf", epub_key="out.epub")
 
     monkeypatch.setattr(main, "compose_interior", fake_compose_interior)
 
@@ -110,7 +121,7 @@ def test_compose_cover_calls_compose_cover_with_parsed_fields(monkeypatch):
     def fake_compose_cover(book_id, image_key, title_ar, page_count, paper_type,
                            trim_width_in, trim_height_in, bleed_in, storage=None):
         captured.update(locals())
-        return f"{book_id}/cover.pdf"
+        return ComposeCoverResult(pdf_key=f"{book_id}/cover.pdf", jpeg_key=f"{book_id}/cover.jpg")
 
     monkeypatch.setattr(main, "compose_cover", fake_compose_cover)
 
@@ -127,7 +138,11 @@ def test_compose_cover_calls_compose_cover_with_parsed_fields(monkeypatch):
     )
 
     assert response.status_code == 200
-    assert response.json() == {"output_key": "book-1/cover.pdf"}
+    assert response.json() == {
+        "output_key": "book-1/cover.pdf",
+        "epub_output_key": None,
+        "jpeg_output_key": "book-1/cover.jpg",
+    }
     assert captured["book_id"] == "book-1"
     assert captured["image_key"] == "book-1/cover.png"
     assert captured["title_ar"] == "عنوان الكتاب"
