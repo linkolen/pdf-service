@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="ar" dir="rtl">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="{{ lang }}" dir="{{ dir }}">
 <head>
 <meta charset="utf-8"/>
 <title>{{ page_number }}</title>
@@ -9,7 +9,7 @@
 <body>
 <div class="page{{ ' first-page' if is_first_page else '' }}">
 <img class="bg" src="../images/{{ image_filename }}" alt=""/>
-<p class="story-text" dir="rtl">{{ text_ar }}</p>
+{% if text_ar %}<p class="story-text" dir="{{ dir }}">{{ text_ar }}</p>{% endif %}
 </div>
 </body>
 </html>

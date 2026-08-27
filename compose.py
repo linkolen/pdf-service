@@ -21,12 +21,13 @@ from weasyprint import HTML
 
 import layout
 from epub import EpubPageSpec, build_interior_epub
-from imaging import fit_and_encode_jpeg
+from imaging import fit_and_encode_jpeg, prepare_coloring_page_png
 from storage import Storage
 
 BASE_DIR = Path(__file__).parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 FONT_PATH = "../fonts/NotoNaskhArabic[wght].ttf"
+FONT_EN_PATH = "../fonts/DejaVuSerif.ttf"
 
 
 @dataclass
@@ -75,11 +76,22 @@ def compose_interior(
     trim_height_in: float = 8.5,
     bleed_in: float = 0.125,
     title_ar: Optional[str] = None,
+    book_type: str = "story",
+    full_bleed_images: bool = False,
+    language: str = "ar",
     storage: Optional[Storage] = None,
 ) -> ComposeInteriorResult:
     """Fetch each page's image from MinIO `uploads`, render the combined
     interior as both a KDP-ready print PDF and a reflowable Kindle EPUB,
-    write both to MinIO `outputs`, and return their object keys."""
+    write both to MinIO `outputs`, and return their object keys.
+
+    book_type="story": each page is a full-bleed illustration with an RTL
+    paragraph overlay (the original picture-book layout).
+    book_type="coloring": each page is a bordered, contained black-and-white
+    line-art frame with an optional short caption underneath -- no
+    full-bleed background (CLAUDE.md's Book types section), unless
+    full_bleed_images is set, in which case the line art fills the page
+    edge-to-edge like a story page (still thresholded to pure B&W)."""
     for warning in layout.validate_page_count(len(pages)):
         print(f"[compose_interior] warning: {warning}")
 
@@ -98,23 +110,55 @@ def compose_interior(
     for page in sorted(pages, key=lambda p: p.page_number):
         image_bytes = store.get_image_bytes(page.image_key)
         margins = layout.get_page_margins(page.page_number, total_pages)
-        fitted_bytes = fit_and_encode_jpeg(
-            image_bytes, page_width_px, page_height_px, INTERIOR_JPEG_QUALITY
-        )
+
+        # Activity books embed the full-resolution puzzle image (no
+        # downscale to safe area) to preserve ≥300 DPI at trim size.
+        # Coloring books use the bordered contain-fit frame.
+        if book_type == "activity":
+            image_data_uri = _data_uri(image_bytes, "page.png")
+        elif book_type == "coloring" and full_bleed_images:
+            # Full-bleed line art: threshold to pure B&W, then cover-fit the
+            # whole page like a story page (no border frame).
+            fitted_bytes = fit_and_encode_jpeg(
+                prepare_coloring_page_png(
+                    image_bytes, page_width_px, page_height_px
+                ),
+                page_width_px,
+                page_height_px,
+                INTERIOR_JPEG_QUALITY,
+            )
+            image_data_uri = _data_uri(fitted_bytes, "page.jpg")
+        elif book_type == "coloring":
+            safe_width_px = math.ceil(
+                (page_width_in - margins.left_in - margins.right_in) * INTERIOR_PRINT_DPI
+            )
+            safe_height_px = math.ceil(
+                (page_height_in - margins.top_in - margins.bottom_in) * INTERIOR_PRINT_DPI
+            )
+            fitted_bytes = prepare_coloring_page_png(image_bytes, safe_width_px, safe_height_px)
+            image_data_uri = _data_uri(fitted_bytes, "page.png")
+        else:
+            fitted_bytes = fit_and_encode_jpeg(
+                image_bytes, page_width_px, page_height_px, INTERIOR_JPEG_QUALITY
+            )
+            image_data_uri = _data_uri(fitted_bytes, "page.jpg")
+
         rendered_pages.append(
             {
                 "page_number": page.page_number,
-                "image_data_uri": _data_uri(fitted_bytes, "page.jpg"),
+                "image_data_uri": image_data_uri,
                 "text_ar": page.text_ar,
                 "margins": margins,
             }
         )
+        # Activity pages carry their caption inside the puzzle PNG's banner;
+        # emitting it again as EPUB text would duplicate it.
         epub_pages.append(
             EpubPageSpec(
                 page_number=page.page_number,
                 image_key=page.image_key,
                 image_bytes=image_bytes,
-                text_ar=page.text_ar,
+                text_ar=page.text_ar if book_type != "activity" else "",
             )
         )
 
@@ -124,6 +168,10 @@ def compose_interior(
         page_width_in=page_width_in,
         page_height_in=page_height_in,
         font_path=FONT_PATH,
+        font_en_path=FONT_EN_PATH,
+        book_type=book_type,
+        full_bleed_images=full_bleed_images,
+        language=language,
         pages=rendered_pages,
     )
 
@@ -135,6 +183,8 @@ def compose_interior(
         book_id=book_id,
         title_ar=title_ar or book_id,
         pages=epub_pages,
+        book_type=book_type,
+        language=language,
     )
     epub_key = f"{book_id}/interior.epub"
     store.put_epub_bytes(epub_key, epub_bytes)
@@ -149,10 +199,8 @@ def _rasterize_front_cover_jpeg(
     dpi: int = EBOOK_COVER_DPI,
 ) -> bytes:
     """Rasterizes just the front-cover panel (the rightmost strip of the
-    flattened back|spine|front spread, see compose_cover) out of the already
-    Pango-rendered wraparound cover PDF, so the Arabic title keeps the same
-    correctly-shaped RTL rendering as the print cover instead of a second,
-    independent text-drawing path. Used for KDP's Kindle eBook cover upload
+    flattened back|spine|front spread, see compose_cover) out of the
+    rendered cover PDF. Used for KDP's Kindle eBook cover upload
     (spec: JPEG, RGB, see config/kdp_rules.json's "ebook_cover")."""
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
@@ -189,19 +237,24 @@ def _rasterize_front_cover_jpeg(
 def compose_cover(
     book_id: str,
     image_key: str,
-    title_ar: str,
     page_count: int,
     paper_type: str,
     trim_width_in: float = 8.5,
     trim_height_in: float = 8.5,
     bleed_in: float = 0.125,
+    cover_title_text: Optional[str] = None,
+    cover_author_text: Optional[str] = None,
+    language: str = "ar",
     storage: Optional[Storage] = None,
 ) -> ComposeCoverResult:
     """Fetch the single wraparound cover illustration from MinIO `uploads`,
-    size the page to KDP's back+spine+front formula (Section 7), overlay the
-    Arabic title on the front-cover panel, render one PDF for print, rasterize
-    that same front panel to a JPEG for KDP's Kindle eBook cover upload, write
-    both to MinIO `outputs`, and return their object keys."""
+    size the page to KDP's back+spine+front formula (Section 7), render one
+    PDF for print, rasterize that same front panel to a JPEG for KDP's
+    Kindle eBook cover upload, write both to MinIO `outputs`, and return
+    their object keys. By default no text is overlaid -- the cover art
+    carries everything. If cover_title_text/cover_author_text are set
+    (opt-in via the UI), the Arabic title/author are drawn on the front
+    panel's upper area in the embedded Arabic font."""
     store = storage or Storage()
 
     spine_in = layout.spine_width_in(page_count, paper_type)
@@ -212,20 +265,23 @@ def compose_cover(
     # to right -- a fixed manufacturing convention, independent of the book's
     # own (RTL) reading direction. The front panel is the rightmost strip.
     front_panel_width_in = trim_width_in + bleed_in
-    safe_margin_in = layout.outside_margin_in(bleed=True)
 
     image_bytes = store.get_image_bytes(image_key)
 
     env = Environment(loader=FileSystemLoader(str(TEMPLATES_DIR)))
     template = env.get_template("cover.html")
+    # Text overlay sits on the front (rightmost) panel, top area, centered
+    # within it with a 0.4in safety margin from the trim/bleed edges.
     html_str = template.render(
         cover_width_in=cover_width_in,
         cover_height_in=cover_height_in,
-        front_panel_width_in=front_panel_width_in,
-        safe_margin_in=safe_margin_in,
-        font_path=FONT_PATH,
         image_data_uri=_data_uri(image_bytes, image_key),
-        title_ar=title_ar,
+        cover_title_text=cover_title_text,
+        cover_author_text=cover_author_text,
+        language=language,
+        cover_text_top_in=round(bleed_in + 0.5, 3),
+        cover_text_right_in=round(bleed_in + 0.4, 3),
+        cover_text_width_in=round(trim_width_in - 0.8, 3),
     )
 
     pdf_bytes = HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf()

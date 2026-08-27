@@ -1,11 +1,16 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="{{ language }}" class="{{ 'lang-en' if language == 'en' else 'lang-ar' }}">
 <head>
 <meta charset="utf-8">
 <style>
   @font-face {
     font-family: "Noto Naskh Arabic";
     src: url("{{ font_path }}");
+  }
+
+  @font-face {
+    font-family: "DejaVu Serif";
+    src: url("{{ font_en_path }}");
   }
 
   @page {
@@ -49,6 +54,22 @@
     box-sizing: border-box;
   }
 
+  /* English books: LTR, Latin serif font, centered text. */
+  .lang-en .story-text {
+    direction: ltr;
+    unicode-bidi: isolate;
+    font-family: "DejaVu Serif", serif;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  .lang-en .caption-text,
+  .lang-en .caption-band {
+    direction: ltr;
+    unicode-bidi: isolate;
+    font-family: "DejaVu Serif", serif;
+  }
+
   .story-text {
     direction: rtl;
     unicode-bidi: isolate;
@@ -66,11 +87,134 @@
     border-radius: 14px;
     max-width: 92%;
   }
+
+  /* Coloring book pages (book_type == "coloring"): a bordered, contained
+     line-art frame with a white margin, not the storybook's full-bleed
+     background -- CLAUDE.md's Book types section: "a white border is
+     common and forgiving for coloring books". */
+  .coloring-safe-zone {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-sizing: border-box;
+  }
+
+  .line-art-frame {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2pt solid #333333;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+
+  .line-art {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  /* Activity book pages: full-res puzzle image, no border frame.
+     The image is already rendered at 300 DPI at page size; keep it
+     at full resolution and let the margin handle the safe area. */
+  .activity-safe-zone {
+    position: absolute;
+    box-sizing: border-box;
+  }
+
+  /* Explicit height instead of flex: WeasyPrint's flex implementation does
+     not shrink oversized images for a sibling caption, which fragmented
+     long captions onto the next page. Reserving 1in for up to two caption
+     lines and letting the image contain-fit the rest is deterministic. */
+  .activity-puzzle-image {
+    width: 100%;
+    height: calc(100% - 1in);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .activity-puzzle-image img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .caption-text {
+    direction: rtl;
+    unicode-bidi: isolate;
+    font-family: "Noto Naskh Arabic", sans-serif;
+    font-size: 24pt;
+    text-align: center;
+    color: #1a1a1a;
+    margin: 0.1in 0 0 0;
+  }
+
+  /* Full-bleed coloring caption: opaque white band so the word stays
+     readable over the artwork (no alpha -- KDP requires flattened PDFs). */
+  .caption-band {
+    direction: rtl;
+    unicode-bidi: isolate;
+    font-family: "Noto Naskh Arabic", sans-serif;
+    font-size: 22pt;
+    text-align: center;
+    color: #1a1a1a;
+    background: #ffffff;
+    border-radius: 0.12in;
+    margin: 0;
+    padding: 0.05in 0.2in;
+  }
 </style>
 </head>
 <body>
 {% for page in pages %}
   <div class="page">
+    {% if book_type == "activity" %}
+    <div class="activity-safe-zone" style="
+        top: {{ page.margins.top_in }}in;
+        left: {{ page.margins.left_in }}in;
+        width: {{ page_width_in - page.margins.left_in - page.margins.right_in }}in;
+        height: {{ page_height_in - page.margins.top_in - page.margins.bottom_in }}in;
+      ">
+      {# The caption is baked into the puzzle PNG's dashed banner by the
+         Java renderer -- rendering it here too would duplicate it. #}
+      <div class="activity-puzzle-image" style="height: 100%">
+        <img src="{{ page.image_data_uri }}" alt="">
+      </div>
+    </div>
+    {% elif book_type == "coloring" and full_bleed_images %}
+    {# Full-bleed line art: image already thresholded + cover-fit by compose.py #}
+    <img class="bg" src="{{ page.image_data_uri }}" alt="">
+    {% if page.text_ar %}
+    <div class="text-safe-zone" style="
+        top: {{ page_height_in - page.margins.bottom_in - 0.7 }}in;
+        left: {{ page.margins.left_in }}in;
+        width: {{ page_width_in - page.margins.left_in - page.margins.right_in }}in;
+        height: 0.7in;
+      ">
+      <p class="caption-band">{{ page.text_ar }}</p>
+    </div>
+    {% endif %}
+    {% elif book_type == "coloring" %}
+    <div class="coloring-safe-zone" style="
+        top: {{ page.margins.top_in }}in;
+        left: {{ page.margins.left_in }}in;
+        width: {{ page_width_in - page.margins.left_in - page.margins.right_in }}in;
+        height: {{ page_height_in - page.margins.top_in - page.margins.bottom_in }}in;
+      ">
+      <div class="line-art-frame">
+        <img class="line-art" src="{{ page.image_data_uri }}" alt="">
+      </div>
+      {% if page.text_ar %}
+      <p class="caption-text">{{ page.text_ar }}</p>
+      {% endif %}
+    </div>
+    {% else %}
     <img class="bg" src="{{ page.image_data_uri }}" alt="">
     <div class="text-safe-zone" style="
         top: {{ page.margins.top_in }}in;
@@ -80,6 +224,7 @@
       ">
       <p class="story-text">{{ page.text_ar }}</p>
     </div>
+    {% endif %}
   </div>
 {% endfor %}
 </body>

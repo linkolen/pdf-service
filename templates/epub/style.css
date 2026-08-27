@@ -3,10 +3,15 @@
   src: url("../fonts/NotoNaskhArabic.ttf");
 }
 
+@font-face {
+  font-family: "DejaVu Serif";
+  src: url("../fonts/DejaVuSerif.ttf");
+}
+
 body {
   margin: 0;
   padding: 0;
-  font-family: "Noto Naskh Arabic", sans-serif;
+  font-family: {{ body_font }};
 }
 
 .page {
@@ -33,7 +38,7 @@ body {
      KDP's own pipeline as the only real target reading system here, spec
      validity wins over hedging for the CSS-bidi-only readers those
      properties would have helped. */
-  text-align: right;
+  text-align: {{ text_align }};
   line-height: 1.7;
   margin: 1em 6%;
 }

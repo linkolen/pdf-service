@@ -30,6 +30,7 @@ from imaging import resize_and_encode_jpeg
 BASE_DIR = Path(__file__).parent
 TEMPLATES_DIR = BASE_DIR / "templates" / "epub"
 FONT_FILE = BASE_DIR / "fonts" / "NotoNaskhArabic[wght].ttf"
+FONT_EN_FILE = BASE_DIR / "fonts" / "DejaVuSerif.ttf"
 
 # KDP's reflowable image guidance (spec: images should occupy a healthy
 # fraction of the screen width) doesn't set a hard pixel ceiling; this is
@@ -60,7 +61,10 @@ def _image_filename(page_number: int) -> str:
     return f"page-{page_number:04d}.jpg"
 
 
-def build_interior_epub(book_id: str, title_ar: str, pages: List[EpubPageSpec]) -> bytes:
+def build_interior_epub(
+    book_id: str, title_ar: str, pages: List[EpubPageSpec], book_type: str = "story",
+    language: str = "ar"
+) -> bytes:
     """Render one reflowable EPUB3 (image + text per story page, in document
     flow) and return its bytes (not written to storage here -- the caller
     owns where it lands)."""
@@ -87,7 +91,11 @@ def build_interior_epub(book_id: str, title_ar: str, pages: List[EpubPageSpec]) 
         pages=manifest_pages,
     )
     nav_xhtml = env.get_template("nav.xhtml").render(title_ar=title_ar, pages=manifest_pages)
-    css = env.get_template("style.css").render()
+    english = language == "en"
+    css = env.get_template("style.css").render(
+        body_font='"DejaVu Serif", serif' if english else '"Noto Naskh Arabic", sans-serif',
+        text_align='center' if english else 'right',
+    )
     container_xml = (TEMPLATES_DIR / "container.xml").read_text(encoding="utf-8")
     page_template = env.get_template("page.xhtml")
 
@@ -102,7 +110,10 @@ def build_interior_epub(book_id: str, title_ar: str, pages: List[EpubPageSpec]) 
         zf.writestr("OEBPS/content.opf", opf_xml)
         zf.writestr("OEBPS/nav.xhtml", nav_xhtml)
         zf.writestr("OEBPS/css/style.css", css)
-        zf.write(FONT_FILE, "OEBPS/fonts/NotoNaskhArabic.ttf")
+        if english:
+            zf.write(FONT_EN_FILE, "OEBPS/fonts/DejaVuSerif.ttf")
+        else:
+            zf.write(FONT_FILE, "OEBPS/fonts/NotoNaskhArabic.ttf")
 
         for page, manifest_page in zip(pages, manifest_pages):
             page_xhtml = page_template.render(
@@ -110,9 +121,13 @@ def build_interior_epub(book_id: str, title_ar: str, pages: List[EpubPageSpec]) 
                 image_filename=manifest_page["image_filename"],
                 text_ar=page.text_ar,
                 is_first_page=(page.page_number == pages[0].page_number),
+                lang=language,
+                dir='ltr' if english else 'rtl',
             )
             fitted_image_bytes = resize_and_encode_jpeg(
-                page.image_bytes, PAGE_IMAGE_MAX_DIMENSION_PX, PAGE_IMAGE_JPEG_QUALITY
+                page.image_bytes,
+                PAGE_IMAGE_MAX_DIMENSION_PX if book_type != "activity" else 3000,
+                PAGE_IMAGE_JPEG_QUALITY,
             )
             zf.writestr(f"OEBPS/text/{manifest_page['xhtml_filename']}", page_xhtml)
             zf.writestr(f"OEBPS/images/{manifest_page['image_filename']}", fitted_image_bytes)

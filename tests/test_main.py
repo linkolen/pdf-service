@@ -21,7 +21,8 @@ def test_compose_calls_compose_interior_with_parsed_pages(monkeypatch):
     captured = {}
 
     def fake_compose_interior(
-        book_id, pages, trim_width_in, trim_height_in, bleed_in, title_ar=None, storage=None
+        book_id, pages, trim_width_in, trim_height_in, bleed_in,
+        title_ar=None, book_type="story", full_bleed_images=False, language="ar", storage=None
     ):
         captured["book_id"] = book_id
         captured["pages"] = pages
@@ -57,11 +58,59 @@ def test_compose_calls_compose_interior_with_parsed_pages(monkeypatch):
     assert captured["pages"][0].image_key == "book-1/page-1.png"
 
 
+def test_compose_defaults_book_type_to_story(monkeypatch):
+    captured = {}
+
+    def fake_compose_interior(
+        book_id, pages, trim_width_in, trim_height_in, bleed_in,
+        title_ar=None, book_type="story", full_bleed_images=False, language="ar", storage=None
+    ):
+        captured["book_type"] = book_type
+        return ComposeInteriorResult(pdf_key="out.pdf", epub_key="out.epub")
+
+    monkeypatch.setattr(main, "compose_interior", fake_compose_interior)
+
+    client.post(
+        "/compose",
+        json={
+            "book_id": "book-1",
+            "pages": [{"page_number": 1, "image_key": "k", "text_ar": "t"}],
+        },
+    )
+
+    assert captured["book_type"] == "story"
+
+
+def test_compose_passes_through_coloring_book_type(monkeypatch):
+    captured = {}
+
+    def fake_compose_interior(
+        book_id, pages, trim_width_in, trim_height_in, bleed_in,
+        title_ar=None, book_type="story", full_bleed_images=False, language="ar", storage=None
+    ):
+        captured["book_type"] = book_type
+        return ComposeInteriorResult(pdf_key="out.pdf", epub_key="out.epub")
+
+    monkeypatch.setattr(main, "compose_interior", fake_compose_interior)
+
+    client.post(
+        "/compose",
+        json={
+            "book_id": "book-1",
+            "book_type": "coloring",
+            "pages": [{"page_number": 1, "image_key": "k", "text_ar": ""}],
+        },
+    )
+
+    assert captured["book_type"] == "coloring"
+
+
 def test_compose_uses_default_trim_when_omitted(monkeypatch):
     captured = {}
 
     def fake_compose_interior(
-        book_id, pages, trim_width_in, trim_height_in, bleed_in, title_ar=None, storage=None
+        book_id, pages, trim_width_in, trim_height_in, bleed_in,
+        title_ar=None, book_type="story", full_bleed_images=False, language="ar", storage=None
     ):
         captured["trim"] = (trim_width_in, trim_height_in, bleed_in)
         return ComposeInteriorResult(pdf_key="out.pdf", epub_key="out.epub")
@@ -78,6 +127,36 @@ def test_compose_uses_default_trim_when_omitted(monkeypatch):
 
     assert response.status_code == 200
     assert captured["trim"] == (8.5, 8.5, 0.125)
+
+
+def test_compose_normalizes_null_text_ar(monkeypatch):
+    """Dot-to-dot pages carry no caption -- the API sends null, which must
+    normalize to an empty string instead of failing validation."""
+    captured = {}
+
+    def fake_compose_interior(
+        book_id, pages, trim_width_in, trim_height_in, bleed_in,
+        title_ar=None, book_type="story", full_bleed_images=False, language="ar", storage=None
+    ):
+        captured["pages"] = pages
+        return ComposeInteriorResult(pdf_key="out.pdf", epub_key="out.epub")
+
+    monkeypatch.setattr(main, "compose_interior", fake_compose_interior)
+
+    response = client.post(
+        "/compose",
+        json={
+            "book_id": "book-1",
+            "pages": [
+                {"page_number": 1, "image_key": "k", "text_ar": None},
+                {"page_number": 2, "image_key": "k2"},
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["pages"][0].text_ar == ""
+    assert captured["pages"][1].text_ar == ""
 
 
 def test_compose_rejects_empty_pages():
@@ -118,8 +197,10 @@ def test_compose_wraps_internal_errors_as_500(monkeypatch):
 def test_compose_cover_calls_compose_cover_with_parsed_fields(monkeypatch):
     captured = {}
 
-    def fake_compose_cover(book_id, image_key, title_ar, page_count, paper_type,
-                           trim_width_in, trim_height_in, bleed_in, storage=None):
+    def fake_compose_cover(book_id, image_key, page_count, paper_type,
+                           trim_width_in, trim_height_in, bleed_in,
+                           cover_title_text=None, cover_author_text=None, language="ar",
+                           storage=None):
         captured.update(locals())
         return ComposeCoverResult(pdf_key=f"{book_id}/cover.pdf", jpeg_key=f"{book_id}/cover.jpg")
 
@@ -131,7 +212,6 @@ def test_compose_cover_calls_compose_cover_with_parsed_fields(monkeypatch):
             "book_id": "book-1",
             "type": "cover",
             "image_key": "book-1/cover.png",
-            "title_ar": "عنوان الكتاب",
             "page_count": 24,
             "paper_type": "color",
         },
@@ -145,7 +225,6 @@ def test_compose_cover_calls_compose_cover_with_parsed_fields(monkeypatch):
     }
     assert captured["book_id"] == "book-1"
     assert captured["image_key"] == "book-1/cover.png"
-    assert captured["title_ar"] == "عنوان الكتاب"
     assert captured["page_count"] == 24
     assert captured["paper_type"] == "color"
     assert captured["trim_width_in"] == 8.5
@@ -157,7 +236,9 @@ def test_compose_cover_rejects_missing_fields():
         json={"book_id": "book-1", "type": "cover", "image_key": "book-1/cover.png"},
     )
     assert response.status_code == 400
-    assert "title_ar" in response.json()["detail"]
+    assert "page_count" in response.json()["detail"]
+    assert "paper_type" in response.json()["detail"]
+    assert "title_ar" not in response.json()["detail"]
 
 
 def test_compose_cover_wraps_internal_errors_as_500(monkeypatch):
@@ -172,7 +253,6 @@ def test_compose_cover_wraps_internal_errors_as_500(monkeypatch):
             "book_id": "book-1",
             "type": "cover",
             "image_key": "book-1/cover.png",
-            "title_ar": "عنوان",
             "page_count": 24,
             "paper_type": "glossy-vellum",
         },

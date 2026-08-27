@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 from PIL import Image
+import pymupdf
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -44,7 +45,6 @@ def test_compose_cover_writes_correctly_sized_pdf():
     result = compose_cover(
         book_id="book-1",
         image_key=image_key,
-        title_ar="أرنوب يتعلم المشاركة",
         page_count=24,
         paper_type="color",
         storage=storage,
@@ -52,7 +52,16 @@ def test_compose_cover_writes_correctly_sized_pdf():
 
     assert result.pdf_key == "book-1/cover.pdf"
     assert result.pdf_key in storage.written_pdfs
-    assert storage.written_pdfs[result.pdf_key][:4] == b"%PDF"
+    pdf_bytes = storage.written_pdfs[result.pdf_key]
+    assert pdf_bytes[:4] == b"%PDF"
+
+    # The cover carries no overlaid text at all -- the illustration alone
+    # fills the wraparound spread.
+    doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    try:
+        assert doc[0].get_text().strip() == ""
+    finally:
+        doc.close()
 
 
 def test_compose_cover_writes_kdp_compliant_ebook_jpeg():
@@ -62,7 +71,6 @@ def test_compose_cover_writes_kdp_compliant_ebook_jpeg():
     result = compose_cover(
         book_id="book-1",
         image_key=image_key,
-        title_ar="أرنوب يتعلم المشاركة",
         page_count=24,
         paper_type="color",
         trim_width_in=8.5,
@@ -100,7 +108,6 @@ def test_compose_cover_raises_for_unknown_paper_type():
         compose_cover(
             book_id="book-1",
             image_key=image_key,
-            title_ar="عنوان",
             page_count=24,
             paper_type="glossy-vellum",
             storage=storage,

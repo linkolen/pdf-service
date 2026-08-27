@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdk-pixbuf-2.0-0 \
     libffi-dev \
     shared-mime-info \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -18,6 +19,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY fonts/ fonts/
+# Bundle a Latin serif font for English books (Arabic uses Noto Naskh).
+RUN cp /usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf fonts/DejaVuSerif.ttf
 COPY assets/ assets/
 COPY templates/ templates/
 COPY config/ config/

@@ -26,7 +26,9 @@ class TrimIn(BaseModel):
 class PageIn(BaseModel):
     page_number: int
     image_key: str
-    text_ar: str
+    # Dot-to-dot pages have no caption, so the API sends null -- normalize to
+    # an empty string so templates' truthiness checks stay simple.
+    text_ar: Optional[str] = ""
 
 
 class ComposeRequest(BaseModel):
@@ -36,12 +38,18 @@ class ComposeRequest(BaseModel):
 
     # "interior" fields
     pages: List[PageIn] = []
+    book_type: str = "story"
+    full_bleed_images: bool = False
+    # "ar" (RTL, Noto Naskh) or "en" (LTR, DejaVu Serif)
+    language: str = "ar"
 
     # "cover" fields
     image_key: Optional[str] = None
     title_ar: Optional[str] = None
     page_count: Optional[int] = None
     paper_type: Optional[str] = None
+    cover_title_text: Optional[str] = None
+    cover_author_text: Optional[str] = None
 
 
 class ComposeResponse(BaseModel):
@@ -69,7 +77,7 @@ def _compose_interior(request: ComposeRequest) -> ComposeResponse:
         raise HTTPException(status_code=400, detail="At least one page is required")
 
     pages = [
-        PageSpec(page_number=p.page_number, image_key=p.image_key, text_ar=p.text_ar)
+        PageSpec(page_number=p.page_number, image_key=p.image_key, text_ar=p.text_ar or "")
         for p in request.pages
     ]
 
@@ -81,6 +89,9 @@ def _compose_interior(request: ComposeRequest) -> ComposeResponse:
             trim_height_in=request.trim.height_in,
             bleed_in=request.trim.bleed_in,
             title_ar=request.title_ar,
+            book_type=request.book_type,
+            full_bleed_images=request.full_bleed_images,
+            language=request.language,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -93,7 +104,6 @@ def _compose_cover(request: ComposeRequest) -> ComposeResponse:
         field
         for field, value in [
             ("image_key", request.image_key),
-            ("title_ar", request.title_ar),
             ("page_count", request.page_count),
             ("paper_type", request.paper_type),
         ]
@@ -108,12 +118,14 @@ def _compose_cover(request: ComposeRequest) -> ComposeResponse:
         result = compose_cover(
             book_id=request.book_id,
             image_key=request.image_key,
-            title_ar=request.title_ar,
             page_count=request.page_count,
             paper_type=request.paper_type,
             trim_width_in=request.trim.width_in,
             trim_height_in=request.trim.height_in,
             bleed_in=request.trim.bleed_in,
+            cover_title_text=request.cover_title_text,
+            cover_author_text=request.cover_author_text,
+            language=request.language,
         )
     except HTTPException:
         raise

@@ -114,3 +114,55 @@ def test_compose_interior_defaults_epub_title_to_book_id_when_missing():
     with zipfile.ZipFile(io.BytesIO(epub_bytes)) as zf:
         opf = zf.read("OEBPS/content.opf").decode("utf-8")
         assert "<dc:title>book-1</dc:title>" in opf
+
+
+def test_compose_interior_coloring_book_writes_png_pages_and_valid_pdf():
+    images = {f"book-1/page-{n}.png": _make_png_bytes(2625, 2625) for n in range(1, 3)}
+    pages = [
+        PageSpec(page_number=1, image_key="book-1/page-1.png", text_ar="قطة"),
+        PageSpec(page_number=2, image_key="book-1/page-2.png", text_ar=""),
+    ]
+    storage = FakeStorage(images)
+
+    result = compose_interior(
+        book_id="book-1", pages=pages, title_ar="كتاب تلوين", book_type="coloring", storage=storage
+    )
+
+    assert storage.written_pdfs[result.pdf_key][:4] == b"%PDF"
+
+    epub_bytes = storage.written_epubs[result.epub_key]
+    with zipfile.ZipFile(io.BytesIO(epub_bytes)) as zf:
+        names = zf.namelist()
+        # Coloring pages still go through the same reencode-as-JPEG EPUB
+        # image path (epub.py doesn't branch on book_type -- it's already
+        # book-type-agnostic, see page.xhtml's conditional caption).
+        assert "OEBPS/images/page-0001.jpg" in names
+
+        page_with_caption = zf.read("OEBPS/text/page-0001.xhtml").decode("utf-8")
+        assert "قطة" in page_with_caption
+
+        page_without_caption = zf.read("OEBPS/text/page-0002.xhtml").decode("utf-8")
+        assert "<p" not in page_without_caption
+
+
+def test_compose_interior_coloring_book_thresholds_to_pure_black_and_white():
+    # An off-white, slightly textured "line art" source -- exactly what an AI
+    # image model tends to produce instead of a pure white background.
+    img = Image.new("RGB", (2625, 2625), (245, 240, 235))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    images = {"book-1/page-1.png": buf.getvalue()}
+    storage = FakeStorage(images)
+
+    compose_interior(
+        book_id="book-1",
+        pages=[PageSpec(page_number=1, image_key="book-1/page-1.png", text_ar="")],
+        book_type="coloring",
+        storage=storage,
+    )
+
+    # No direct handle to the embedded page PNG from the PDF alone here --
+    # imaging.prepare_coloring_page_png is covered directly in
+    # test_imaging.py; this test just confirms the coloring path runs
+    # end-to-end without error on a realistic off-white source image.
+    assert storage.written_pdfs
