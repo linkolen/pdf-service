@@ -200,7 +200,7 @@ def test_compose_cover_calls_compose_cover_with_parsed_fields(monkeypatch):
     def fake_compose_cover(book_id, image_key, page_count, paper_type,
                            trim_width_in, trim_height_in, bleed_in,
                            cover_title_text=None, cover_author_text=None, language="ar",
-                           storage=None):
+                           storage=None, overlay=None):
         captured.update(locals())
         return ComposeCoverResult(pdf_key=f"{book_id}/cover.pdf", jpeg_key=f"{book_id}/cover.jpg")
 
@@ -228,6 +228,46 @@ def test_compose_cover_calls_compose_cover_with_parsed_fields(monkeypatch):
     assert captured["page_count"] == 24
     assert captured["paper_type"] == "color"
     assert captured["trim_width_in"] == 8.5
+    assert captured["overlay"] is None
+
+
+def test_compose_cover_passes_overlay_through(monkeypatch):
+    captured = {}
+
+    def fake_compose_cover(*args, **kwargs):
+        captured.update(kwargs)
+        return ComposeCoverResult(pdf_key="book-1/cover.pdf", jpeg_key="book-1/cover.jpg")
+
+    monkeypatch.setattr(main, "compose_cover", fake_compose_cover)
+
+    response = client.post(
+        "/compose",
+        json={
+            "book_id": "book-1",
+            "type": "cover",
+            "image_key": "book-1/cover.png",
+            "page_count": 24,
+            "paper_type": "color",
+            "language": "en",
+            "cover_overlay": {
+                "brand": "KIDS HEAVEN",
+                "authority": "AUTH",
+                "title": "DINO BOOK",
+                "age": "AGES 4-6",
+                "edition": "DINO EDITION",
+                "skills": ["Mazes"],
+                "starburst": "24 PAGES!",
+                "comes_head": "COMES WITH:",
+                "comes_with": ["Answer Key"],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    overlay = captured["overlay"]
+    assert overlay.title == "DINO BOOK"
+    assert overlay.skills == ["Mazes"]
+    assert overlay.comes_with == ["Answer Key"]
 
 
 def test_compose_cover_rejects_missing_fields():

@@ -12,7 +12,7 @@ from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from compose import PageSpec, compose_cover, compose_interior
+from compose import CoverOverlay, PageSpec, compose_cover, compose_interior
 
 app = FastAPI(title="Arabic Kids Book - PDF Composition Service")
 
@@ -50,6 +50,7 @@ class ComposeRequest(BaseModel):
     paper_type: Optional[str] = None
     cover_title_text: Optional[str] = None
     cover_author_text: Optional[str] = None
+    cover_overlay: Optional[CoverOverlay] = None
 
 
 class ComposeResponse(BaseModel):
@@ -126,6 +127,7 @@ def _compose_cover(request: ComposeRequest) -> ComposeResponse:
             cover_title_text=request.cover_title_text,
             cover_author_text=request.cover_author_text,
             language=request.language,
+            overlay=request.cover_overlay,
         )
     except HTTPException:
         raise

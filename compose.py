@@ -49,6 +49,26 @@ class ComposeCoverResult:
     jpeg_key: str
 
 
+@dataclass
+class CoverOverlay:
+    """Kids-Heaven front-cover copy deck (Brain Quest style zones).
+
+    All strings are ready-to-render in `language` ("ar" RTL Noto Naskh,
+    "en" LTR DejaVu Sans). When None, compose_cover keeps its legacy
+    behavior (bare art, optional title/author line only).
+    """
+
+    brand: str = "KIDS HEAVEN"
+    authority: str = ""
+    title: str = ""
+    age: str = ""
+    edition: str = ""
+    skills: Optional[List[str]] = None
+    starburst: str = ""
+    comes_head: str = "COMES WITH:"
+    comes_with: Optional[List[str]] = None
+
+
 EBOOK_COVER_DPI = 300
 
 # KDP's interior image floor (spec Section 6) -- exceeding it bloats the PDF
@@ -246,6 +266,7 @@ def compose_cover(
     cover_author_text: Optional[str] = None,
     language: str = "ar",
     storage: Optional[Storage] = None,
+    overlay: Optional[CoverOverlay] = None,
 ) -> ComposeCoverResult:
     """Fetch the single wraparound cover illustration from MinIO `uploads`,
     size the page to KDP's back+spine+front formula (Section 7), render one
@@ -254,7 +275,11 @@ def compose_cover(
     their object keys. By default no text is overlaid -- the cover art
     carries everything. If cover_title_text/cover_author_text are set
     (opt-in via the UI), the Arabic title/author are drawn on the front
-    panel's upper area in the embedded Arabic font."""
+    panel's upper area in the embedded Arabic font. If `overlay` is set
+    (Kids-Heaven activity-book copy deck), the full Brain Quest style zone
+    set -- authority band, brand, theme title, age pill, edition pill,
+    skill rail, starburst, comes-with box -- is drawn on the front panel
+    instead (legacy title/author block is skipped to avoid duplication)."""
     store = storage or Storage()
 
     spine_in = layout.spine_width_in(page_count, paper_type)
@@ -265,6 +290,7 @@ def compose_cover(
     # to right -- a fixed manufacturing convention, independent of the book's
     # own (RTL) reading direction. The front panel is the rightmost strip.
     front_panel_width_in = trim_width_in + bleed_in
+    front_left_in = round(cover_width_in - front_panel_width_in, 3)
 
     image_bytes = store.get_image_bytes(image_key)
 
@@ -276,12 +302,17 @@ def compose_cover(
         cover_width_in=cover_width_in,
         cover_height_in=cover_height_in,
         image_data_uri=_data_uri(image_bytes, image_key),
-        cover_title_text=cover_title_text,
-        cover_author_text=cover_author_text,
+        cover_title_text=None if overlay else cover_title_text,
+        cover_author_text=None if overlay else cover_author_text,
         language=language,
         cover_text_top_in=round(bleed_in + 0.5, 3),
         cover_text_right_in=round(bleed_in + 0.4, 3),
         cover_text_width_in=round(trim_width_in - 0.8, 3),
+        front_left_in=front_left_in,
+        front_width_in=round(front_panel_width_in, 3),
+        front_burst_left_in=round(front_left_in + 0.5, 3),
+        front_edition_left_in=round(front_left_in + 0.55, 3),
+        overlay=overlay,
     )
 
     pdf_bytes = HTML(string=html_str, base_url=str(TEMPLATES_DIR)).write_pdf()
